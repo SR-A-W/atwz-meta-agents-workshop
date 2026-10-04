@@ -3,6 +3,7 @@
 # Agent Team Work Zone
 
 [![License](https://img.shields.io/badge/License-see%20LICENSE-lightgrey.svg)](./LICENSE)
+[![Developed with](https://img.shields.io/badge/Developed%20with-AT%20WorkZone-6f42c1.svg)](https://github.com/anonymous/agent-team-work-zone)
 
 > A persistence and management layer for Claude Code and its Agent Teams.
 
@@ -84,7 +85,7 @@ For any project with real complexity, we **strongly recommend team mode**. A tea
 
 ## Quick Start
 
-> **Claude Code version**: this release (**v0.3.2**) requires **Claude Code ≥ 2.1.178** — it adapts to the 2.1.178 agent-teams API (auto session-scoped teams; `TeamCreate`/`TeamDelete` removed). If your Claude Code is **≤ 2.1.177**, use **[release v0.1.0](https://github.com/anonymous/agent-team-work-zone/releases/tag/v0.1.0)** instead (it targets the old agent-teams API). The installer also enforces this floor.
+> **Claude Code version**: this release (**v0.4.0**) requires **Claude Code ≥ 2.1.178** — it adapts to the 2.1.178 agent-teams API (auto session-scoped teams; `TeamCreate`/`TeamDelete` removed). If your Claude Code is **≤ 2.1.177**, use **[release v0.1.0](https://github.com/anonymous/agent-team-work-zone/releases/tag/v0.1.0)** instead (it targets the old agent-teams API). The installer also enforces this floor.
 
 > **Platform support**: currently supported on **Linux** and **macOS**. The install/upgrade scripts and runtime hooks are bash-based; **Windows is not yet supported** (native Windows has no bash — native support is on the roadmap, planned for the next major release). Windows users can run it via WSL for now.
 

@@ -84,7 +84,7 @@ Agent Team Work Zone 把这些 agent 当作**真实的员工**来对待。在这
 
 ## Quick Start
 
-> **Claude Code 版本**：本发行版(**v0.3.2**)要求 **Claude Code ≥ 2.1.178**——它适配 2.1.178 的 agent-teams API(自动会话级 team;`TeamCreate`/`TeamDelete` 已移除)。若你的 Claude Code **≤ 2.1.177**，请改用 **[release v0.1.0](https://github.com/anonymous/agent-team-work-zone/releases/tag/v0.1.0)**(针对旧 agent-teams API)。安装脚本也会强制这条下限。
+> **Claude Code 版本**：本发行版(**v0.4.0**)要求 **Claude Code ≥ 2.1.178**——它适配 2.1.178 的 agent-teams API(自动会话级 team;`TeamCreate`/`TeamDelete` 已移除)。若你的 Claude Code **≤ 2.1.177**，请改用 **[release v0.1.0](https://github.com/anonymous/agent-team-work-zone/releases/tag/v0.1.0)**(针对旧 agent-teams API)。安装脚本也会强制这条下限。
 
 > **平台支持**：目前支持 **Linux** 和 **macOS**。安装/升级脚本和运行时 hook 基于 bash;**Windows 暂不支持**(原生 Windows 无 bash，原生化在 roadmap 上、计划于下一个大版本提供)。Windows 用户当前可借助 WSL 运行。
 
