@@ -13,7 +13,8 @@
 #
 # What it does:
 #   1. Creates a temp dir + EXIT trap so $TMP is always cleaned up.
-#   2. Downloads the latest framework from GitHub (main branch) via curl+tar.
+#   2. Downloads the latest framework from GitHub (main branch) via curl+tar —
+#      or, if UPGRADE_SOURCE_DIR is set, uses that local template directory.
 #   3. Verifies the download contains a VERSION file.
 #   4. Copies the downloaded template into .upgrade/ staging.
 #   5. Invokes the migration-chain dispatcher: .upgrade/resources/scripts/upgrade.sh
@@ -35,12 +36,14 @@ TEMPLATE_PATH_IN_ARCHIVE="agent-team-work-zone-main/claude_code/en/_agent_team_w
 # -------- Minimal inline print helpers (common.sh is in staged source, not here) --------
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
     _R=$'\033[0m'; _B=$'\033[1m'; _RED=$'\033[31m'; _GRN=$'\033[32m'; _YLW=$'\033[33m'; _CYN=$'\033[36m'
+    # warning colour: mirrors __C_WARN in resources/scripts/migrations/common.sh — keep in sync
+    if [ "$(tput colors 2>/dev/null || echo 0)" -ge 256 ] 2>/dev/null; then _WRN=$'\033[1;38;5;202m'; else _WRN=$'\033[1;31m'; fi
 else
-    _R=""; _B=""; _RED=""; _GRN=""; _YLW=""; _CYN=""
+    _R=""; _B=""; _RED=""; _GRN=""; _YLW=""; _CYN=""; _WRN=""
 fi
 _header() { printf '%s==================================================%s\n%s  %s%s\n%s==================================================%s\n' "$_B" "$_R" "$_B$_CYN" "$1" "$_R" "$_B" "$_R"; }
 _ok()     { printf '%s✓%s %s\n' "$_GRN" "$_R" "$1"; }
-_warn()   { printf '%s⚠%s %s\n' "$_YLW" "$_R" "$1"; }
+_warn()   { printf '%s⚠ %s%s\n' "$_WRN" "$1" "$_R"; }
 _err()    { printf '%s✗%s %s\n' "$_RED" "$_R" "$1"; }
 _step()   { printf '  → %s\n' "$1"; }
 
@@ -53,22 +56,39 @@ printf 'Target:       %s\n' "$TARGET_DIR"
 printf 'Project root: %s\n' "$PROJECT_ROOT"
 echo ""
 
-# -------- Step 1: Download latest framework --------
-_header "Downloading latest framework"
-_step "GET $REPO_ARCHIVE_URL"
+# -------- Step 1: Get the new framework (download, or a local directory) --------
+# UPGRADE_SOURCE_DIR=<dir>: use an already-unpacked new-version template — the
+# directory that holds VERSION, resources/ and docs/ (e.g. claude_code/<lang>/
+# _agent_team_work_zone of a local checkout). Nothing is downloaded.
+if [ -n "${UPGRADE_SOURCE_DIR:-}" ]; then
+    _header "Using local framework source"
+    if ! EXTRACTED_DIR="$(cd "$UPGRADE_SOURCE_DIR" 2>/dev/null && pwd)"; then
+        _err "UPGRADE_SOURCE_DIR is not a directory: $UPGRADE_SOURCE_DIR"
+        exit 1
+    fi
+    if [ "$EXTRACTED_DIR" = "$TARGET_DIR" ]; then
+        _err "UPGRADE_SOURCE_DIR points at this install itself: $EXTRACTED_DIR"
+        exit 1
+    fi
+    _ok "Source: $EXTRACTED_DIR"
+    echo ""
+else
+    _header "Downloading latest framework"
+    _step "GET $REPO_ARCHIVE_URL"
 
-if ! curl -fsSL "$REPO_ARCHIVE_URL" | tar xz -C "$TMP"; then
-    _err "Download or extraction failed."
-    _err "Check your internet connection and that the repo URL is reachable:"
-    _err "  $REPO_ARCHIVE_URL"
-    exit 1
+    if ! curl -fsSL "$REPO_ARCHIVE_URL" | tar xz -C "$TMP"; then
+        _err "Download or extraction failed."
+        _err "Check your internet connection and that the repo URL is reachable:"
+        _err "  $REPO_ARCHIVE_URL"
+        exit 1
+    fi
+
+    _ok "Downloaded and extracted to $TMP"
+    echo ""
+    EXTRACTED_DIR="$TMP/$TEMPLATE_PATH_IN_ARCHIVE"
 fi
 
-_ok "Downloaded and extracted to $TMP"
-echo ""
-
-# -------- Step 2: Verify the extract looks like a valid framework --------
-EXTRACTED_DIR="$TMP/$TEMPLATE_PATH_IN_ARCHIVE"
+# -------- Step 2: Verify the source looks like a valid framework --------
 EXTRACTED_VERSION_FILE="$EXTRACTED_DIR/VERSION"
 
 if [ ! -f "$EXTRACTED_VERSION_FILE" ]; then
