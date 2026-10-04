@@ -3,6 +3,7 @@
 # Agent Team Work Zone
 
 [![License](https://img.shields.io/badge/License-see%20LICENSE-lightgrey.svg)](./LICENSE)
+[![Developed with](https://img.shields.io/badge/Developed%20with-AT%20WorkZone-6f42c1.svg)](https://github.com/anonymous/agent-team-work-zone)
 
 > 面向 Claude Code 及其 Agent Teams 的持久化管理层。
 
@@ -84,7 +85,7 @@ Agent Team Work Zone 把这些 agent 当作**真实的员工**来对待。在这
 
 ## Quick Start
 
-> **Claude Code 版本**：本发行版(**v0.4.0**)要求 **Claude Code ≥ 2.1.178**——它适配 2.1.178 的 agent-teams API(自动会话级 team;`TeamCreate`/`TeamDelete` 已移除)。若你的 Claude Code **≤ 2.1.177**，请改用 **[release v0.1.0](https://github.com/anonymous/agent-team-work-zone/releases/tag/v0.1.0)**(针对旧 agent-teams API)。安装脚本也会强制这条下限。
+> **Claude Code 版本**：本发行版(**v0.5.0**)要求 **Claude Code ≥ 2.1.178**——它适配 2.1.178 的 agent-teams API(自动会话级 team;`TeamCreate`/`TeamDelete` 已移除)。若你的 Claude Code **≤ 2.1.177**，请改用 **[release v0.1.0](https://github.com/anonymous/agent-team-work-zone/releases/tag/v0.1.0)**(针对旧 agent-teams API)。安装脚本也会强制这条下限。
 
 > **平台支持**：目前支持 **Linux** 和 **macOS**。安装/升级脚本和运行时 hook 基于 bash;**Windows 暂不支持**(原生 Windows 无 bash，原生化在 roadmap 上、计划于下一个大版本提供)。Windows 用户当前可借助 WSL 运行。
 
@@ -106,6 +107,16 @@ cp -r claude_code/zh/_agent_team_work_zone /path/to/your/project/   # 中文版�
 
 > **不想用命令行?** 直接在文件管理器(Finder / Nautilus 等)里操作：进入 clone 下来的仓库，把 `claude_code/zh/_agent_team_work_zone`(或 `en/` 版)整个文件夹**复制**，**粘贴**到你的目标项目根目录下，效果完全一样。
 
+> [!IMPORTANT]
+> **`_agent_team_work_zone/` 必须放在项目目录里，并且永远在这个目录下启动 Claude Code**——也就是*包含* `_agent_team_work_zone/` 的那个目录。
+>
+> 常见错误：登录 HPC 集群（或任何服务器）后直接在 home 目录里启动 `claude`，而 work zone 却在某个项目文件夹里。这样会：
+> - 项目 `.claude/` 里的 hooks 和设置不会生效，skills 在启动时也用不了；
+> - 工位（每个 agent 在 work zone 里的目录）路径从项目根目录解析，checkpoint 和唤回（`/reactivate-team`）会去错的地方找；
+> - teammate 从 lead 当前所在的目录启动——lead 在错的目录里运行（或它的 shell 切到了某个子目录），派生出的 teammate 也从那里启动，相对路径随之失效。
+>
+> 所以：先 `cd /path/to/your/project`，再运行 `claude`。把 home 目录本身当作项目也可以——只要 `_agent_team_work_zone/` 就在 home 目录下，并且在那里启动 Claude。但我们依然强烈推荐：在项目目录下使用该项目专有的 agent team work zone，并为它单独启动一个 Claude Code session。
+
 ### 3. 安装
 
 ```bash
@@ -114,6 +125,22 @@ bash _agent_team_work_zone/install.sh
 ```
 
 脚本会把 skills 和 agent definitions 安装到 `.claude/` 目录，并启用所需的 Claude Code 设置。
+
+#### 把 `_agent_team_work_zone/` 纳入 git 管理（强烈推荐）
+
+把 `_agent_team_work_zone/` 和代码一起提交到项目的 git 仓库，不要把它加进 `.gitignore`。纳入 git 管理的，是 agent 最核心、最重要的工作记忆：角色定义、checkpoint、工作日志、讨论记录和团队登记表。运行期的临时文件由 work zone 自带的 `.gitignore` 排除。
+
+- **agent 的工作记忆和日志也得到版本管理。** checkpoint、工作日志、讨论记录和决策，正逐渐成为项目开发记录的重要组成部分。用 git 跟踪它们，尤其是推送到 GitHub 之后，就等于用 git 管理了 agent 们的项目记忆：一方面记忆有了备份，丢失的风险大大降低；另一方面记忆可以回溯——当 agent 或项目走偏时，可以退回到之前的状态。
+- **方便迁移到新机器。** 在另一台机器上 clone 项目，先在那里运行一次安装脚本（`bash _agent_team_work_zone/install.sh`，它会安装 skills、hooks 并配置 Claude Code），再在项目目录下启动 Claude，用 `/reactivate-team` 就能拉起一支角色相同、状态相同的 agent 团队。
+- **多人协作。** 每位开发者可以在同一个项目里维护一支或多支 agent 团队；团队之间通过 work zone 了解彼此，并通过 `git push` / `git pull` 交流、互相留言（例如借助 `meeting_room/`）。
+
+```bash
+git add _agent_team_work_zone
+git commit -m "Track the agent team work zone"
+```
+
+> [!CAUTION]
+> 工位里可能有敏感内容（路径、主机名、数据或对话片段）。如果仓库是公开的，push 前先检查或清理，或者把 work zone 放在私有仓库里。
 
 ### 4. 启动一个 agent 并让它入职
 
