@@ -19,7 +19,8 @@
 > **Keep `_agent_team_work_zone/` inside your project directory, and always start Claude Code in that directory** — the directory that *contains* `_agent_team_work_zone/`.
 >
 > A common mistake is to log in to an HPC cluster (or any server) and start `claude` in your home directory while the work zone sits in a project folder. Then:
-> - the project's hooks and settings in `.claude/` are not loaded, and its skills are not available at startup;
+> - Started in a directory **above** the project (for example your home directory): the settings and hooks in the project's `.claude/settings.json` are not loaded, including the switch that turns on agent teams; the project's skills are not available at startup either — they load only after Claude reads or edits a file inside the project.
+> - Started in a **subdirectory** of the project: the skills and the project's CLAUDE.md are found, but the settings and hooks are still not loaded, so agent teams stay off; `/quickstart` stops and tells you to restart in the project root.
 > - workstation (each agent's folder in the work zone) paths are resolved from the project root, so checkpoints and reactivation (`/reactivate-team`) look in the wrong place;
 > - teammates start in the lead's current directory — if the lead runs in the wrong directory (or its shell has moved into a subdirectory), its teammates start there too and their relative paths fail.
 >
@@ -30,7 +31,7 @@
 Commit `_agent_team_work_zone/` to your project's git repository together with your code, and don't add it to `.gitignore`. What git tracks is the agents' core working memory: role definitions, checkpoints, work journals, discussion notes and the team registry. Runtime-only temporary files are excluded by the work zone's own `.gitignore`.
 
 - **The agents' working memory and logs are version-managed too.** Checkpoints, work journals, discussion notes and decisions are increasingly an important part of a project's development record. Tracking them in git — especially once pushed to GitHub — means the agents' project memory is managed by git: it is backed up, which greatly lowers the risk of losing it, and it can be rolled back, for example when the agents or the project have gone off track.
-- **Easy migration to a new machine.** Clone the project on another machine, run `npx agent-team-work-zone reconfigure` there once from the project directory (installed from source: `bash _agent_team_work_zone/resources/scripts/bootstrap.sh --reconfigure`); it installs the skills and hooks, sets Claude Code up, and asks the install questions again, including the display mode and auto permission mode that are set per machine. Then start Claude in the project directory, and `/reactivate-team` brings back an agent team with the same roles and the same state.
+- **Easy migration to a new machine.** Clone the project on another machine, run `npx agent-team-work-zone config` there once from the project directory (installed from source: `bash _agent_team_work_zone/resources/scripts/bootstrap.sh --reconfigure`); it installs the skills and hooks, sets Claude Code up, and asks the install questions again, including the display mode and auto permission mode that are set per machine. Then start Claude in the project directory, and `/reactivate-team` brings back an agent team with the same roles and the same state.
 - **Multi-developer collaboration.** Each developer can run one or more agent teams in the same project. The teams learn about each other through the work zone, and communicate or leave messages for each other via `git push` / `git pull` (for example through `meeting_room/`).
 
 ```bash
@@ -59,14 +60,31 @@ The script will:
 - Create or merge `.claude/settings.json` to enable the experimental agent teams feature
 - Not delete the source directory (unlike the destructive behavior of the old install_skills.sh)
 - On first install, check git: if the project is not in a git repository, or is inside one but not at its root, it tells you. At the root of a repository it asks whether to track `_agent_team_work_zone/` in git (default yes, recommended). Answering no adds `/_agent_team_work_zone/` to the project's `.gitignore`; delete that line later if you change your mind. Without a terminal it does not ask and changes nothing.
+- In a terminal, it asks several questions with menus; pressing Enter all the way through takes the default for each, which includes writing auto permission mode into your global settings `~/.claude/settings.json` (this affects every project on this machine). If you do not want that, choose "skip" for that question.
 
-### 2. Launch an interactive conversation for each role and complete onboarding
+### 2. Start Claude Code and build your first team
+
+**Always start Claude Code in the project root** (the directory that directly contains `_agent_team_work_zone/`):
+
+```bash
+claude
+```
+
+The first time you start in this directory, Claude Code asks whether you trust this folder. The highlighted default is "No, exit", so pressing Enter all the way through exits Claude Code; choose "Yes, I trust this folder".
+
+Then type `/quickstart`, optionally followed by a one-sentence task description:
+
+```
+/quickstart Add unit tests to this project
+```
+
+It asks you no questions: it looks at the project, chooses the team, builds it, and finally tells you who is on the team, how to use it, and proposes a small task that can be done in about 20 minutes; reply run or don't run, or just say what you want done. **Recommended for first-time use.**
+
+**Once you are familiar: choose the roles and team yourself.** Start a named conversation for each role, and in it run the onboard skill (the agent will first ask whether you are recruiting a flat workstation or a team lead):
 
 ```bash
 claude -n "Architect"
 ```
-
-In the conversation, run the onboard skill (the agent will first ask whether you are recruiting a flat workstation or a team lead):
 
 ```
 /onboard Responsible for project architecture design and experimental refactoring
@@ -125,6 +143,7 @@ _agent_team_work_zone/
 ├── resources/                 ← all non-member resources
 │   ├── README.md
 │   ├── skills/                ← source of truth for skills (synced by bootstrap to .claude/skills/)
+│   │   ├── quickstart/SKILL.md
 │   │   ├── onboard/SKILL.md
 │   │   ├── sync/SKILL.md
 │   │   ├── check-inbox/SKILL.md
@@ -188,7 +207,7 @@ _agent_team_work_zone/
 
 ## New Agent Onboarding Guide
 
-When the user assigns you a role in a new Claude Code conversation, follow these steps:
+When the user assigns you a role in a new Claude Code conversation, follow these steps. (To build the first team in a project, the user is recommended to type `/quickstart` directly; see step 2 of "Initial Setup". The `/onboard` way below is for choosing roles yourself once familiar.)
 
 ### Recommended: use the `/onboard` skill
 
@@ -380,9 +399,11 @@ When receiving a task that requires hands-on work, first judge:
 - **Automatic reminder (works for in-process too, as of v0.2.3)**: when you've gone more than 15 minutes since your last save and try to go idle, the `TeammateIdle` hook blocks you with `exit 2` and feeds the "run /checkpoint first" reminder straight to you, forcing a save before idle. This path sidesteps the old chain's inability to identify in-process teammates, so it works in **both** in-process and tmux modes.
 - ⚠️ But **do not treat the auto-reminder as your only safety net**: it catches you at most once every 15 minutes, so an unexpected exit can still lose up to ~15 minutes of work. Checkpointing remains your **proactive duty** — write one as soon as you finish meaningful progress, don't just wait to be blocked.
 - `working-context.md` is your **handoff document to your future self (the next spawn of you)**. Poorly written → next-you cannot recover state.
-- `commitments.md` records promises you made to others. Anything unfinished here must be picked up by next-you even if `/checkpoint` didn't capture it in working-context.
+- `commitments.md` records promises you made to others. Anything unfinished here must be picked up by next-you even if `/checkpoint` didn't capture it in working-context. If a commitment's premise has changed, ask the lead to rule it void instead of leaving it open; then mark it void in `commitments.md` yourself, quoting the ruling, and keep the entry.
 - **Stay reachable**: teammates' messages reach you only after your turn ends. To watch a job, schedule a wake-up with `/loop`, then end your turn; do not wait inside the turn (a shell `until … sleep` loop, or a chain of checks) — neither a long blocking call nor a chain of short checks lets messages through; only ending the turn does. Ending the turn without a scheduled wake-up leaves the job unwatched; if you cannot use `/loop`, end the turn with a short status to the lead, who pings you to continue
 - **On spawn / reactivation**: first write `teammates/<your-name>/.started` (the current time) before reading anything; end your receipt (`Resumed…` / `Ready`) with `Model: <name>, ID: <id>` quoted from your own system prompt, or `Model: not stated` if it gives none — don't guess
+- **Read your workstation files to the end**: use the Read tool; if a notice says only part of a file was shown, keep reading from the offset it gives until you reach the end. `working-context.md` and `commitments.md` must be read to the end (in `working-context.md`, read Part A in full; its newest entries are at the end of the file, and older entries in between may be skimmed); if you could not finish one, name it in your receipt as `Unread: <file>`
+- **Put problems in your report**: when you go idle the lead is notified automatically, and that notification may carry a summary of your turn, but the lead does not act on it. Everything the lead needs to know goes in your SendMessage report, including problems you ran into: a read that was cut short, a step that did not work, a file you did not finish reading
 
 **If you are a team lead**:
 
@@ -397,7 +418,7 @@ When receiving a task that requires hands-on work, first judge:
   - **After a spawn or reactivation, check two things**: the `teammates/<name>/.started` file the teammate writes first, and the `Model: <name>, ID: <id>` at the end of its receipt (usage in `/spawn-team`, `/reactivate-team`)
 - **Send a working teammate one complete correction, not a stream**: a teammate receives nothing mid-turn — corrections you send one after another all arrive together when its turn ends, after it has already acted on the old instruction. Make a correction self-contained, say that it supersedes earlier ones, and wait for the receipt before sending the next
 - **Temporary offline (benched) and on-demand wake**: the number of online teammates is capped by Claude Code. When a teammate is not needed in the current phase, or you need to free an online slot, use `/bench-teammate` to take it temporarily offline (full record + workstation retained, `status=benched`, **not** woken by no-arg `/reactivate-team`). Conversely, **at any point — especially when assigning work / before starting a task — the moment you judge you need a benched member's specialty, immediately propose waking it to the user**, and after the user consents (or names it directly) wake it via `/reactivate-team <name>`. The status table (active / idle / benched / offboarded) is yours to maintain and is **a black box to the user** — the user participates only at the "propose—consent" level, never touching status fields or picking from any list.
-- **Proactively have teammates checkpoint before risky operations**: the automatic reminder (`TeammateIdle` + exit 2) only fires when a teammate is **itself about to go idle** and is >15 minutes past its last save, and it only caps the loss window at ~15 minutes. So before a restart / shutdown / long suspension, still `SendMessage` each active teammate to run `/checkpoint` and confirm it landed — treat the auto-reminder as a backstop, not the only safety net.
+- **Proactively have teammates checkpoint before risky operations**: the automatic reminder (`TeammateIdle` + exit 2) only fires when a teammate is **itself about to go idle** and is >15 minutes past its last save (a teammate that was just spawned or reactivated is not reminded during its first 15 minutes either), and it only caps the loss window at ~15 minutes. So before a restart / shutdown / long suspension, still `SendMessage` each active teammate to run `/checkpoint` and confirm it landed — treat the auto-reminder as a backstop, not the only safety net.
 - Do not modify any teammate's workstation files (rule #1). To make a teammate do something → `SendMessage`, never edit their files directly.
 
 **Why this rule must exist**: Claude Code's agent-teams feature **does not persist teammate state across sessions**. When the lead restarts, all teammate sessions are gone — only the teammate's own `working-context.md` + the lead's `TEAMMATE_INFO.json` + `/reactivate-team` (the three pillars) can bring the team back.
@@ -416,6 +437,7 @@ After installation, they can be triggered in a conversation via `/skill_name`. S
 
 | Skill | Command | Function |
 |-------|------|------|
+| quickstart | `/quickstart [task description]` | Recommended for first-time use: asks no questions; looks at the project, chooses the team, creates the lead workstation, spawns the teammates and waits until they are ready, then explains how to use the team and proposes a small task |
 | onboard | `/onboard <description>` | New agent onboarding: first ask whether flat or team lead, then automatically complete naming, workstation creation, and member-table registration |
 | sync | `/sync` | Sync workspace changes + role recovery after context compression |
 | check-inbox | `/check-inbox` | Check the top-level meeting_room (for everyone) + the roundtable of the current team (for team leads), processed in chronological order |

@@ -76,6 +76,7 @@ Bootstrap will:
 - Create or merge `.claude/settings.json` to enable `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
 - On first install, check git: if the project is not in a git repository, or is inside one but not at its root, it tells you. At the root of a repository it asks whether to track `_agent_team_work_zone/` in git (default yes, recommended). Answering no adds `/_agent_team_work_zone/` to the project's `.gitignore`; delete that line later if you change your mind. Without a terminal it does not ask and changes nothing.
 - Ask its questions as menus: move with the arrow keys, confirm with Enter, or press a number key. Without a terminal it asks nothing: on a first install the optional `CLAUDE.md` sections are added and the work zone is left to be tracked in git, while the display mode and auto permission mode stay as they are. In a terminal, warnings are shown in bold orange-red and the recommended choice in green (set `NO_COLOR` to turn colours off).
+- In a terminal, pressing Enter all the way through takes the default for each question, which includes writing auto permission mode into your global settings `~/.claude/settings.json` (this affects every project on this machine). If you do not want that, choose "skip" for that question.
 
 > **💡 Strongly recommended: run Claude Code inside tmux** (not just on HPC — local benefits too). When the terminal closes / SSH disconnects, tmux keeps the Claude Code process alive and the session uninterrupted — **you come back, `tmux attach`, and keep going, sparing yourself frequent `/reactivate-team`**. It is strongly recommended but **not required**: without tmux you can still run the full agent-team feature set in in-process mode. To get "persistent **and** no extra panes", launch claude inside tmux + set `teammateMode: "in-process"` (see the developer manual's "Persistence comes from tmux" section).
 
@@ -85,7 +86,8 @@ Bootstrap will:
 > **Keep `_agent_team_work_zone/` inside your project directory, and always start Claude Code in that directory** — the directory that *contains* `_agent_team_work_zone/`.
 >
 > A common mistake is to log in to an HPC cluster (or any server) and start `claude` in your home directory while the work zone sits in a project folder. Then:
-> - the project's hooks and settings in `.claude/` are not loaded, and its skills are not available at startup;
+> - Started in a directory **above** the project (for example your home directory): the settings and hooks in the project's `.claude/settings.json` are not loaded, including the switch that turns on agent teams; the project's skills are not available at startup either — they load only after Claude reads or edits a file inside the project.
+> - Started in a **subdirectory** of the project: the skills and the project's CLAUDE.md are found, but the settings and hooks are still not loaded, so agent teams stay off; `/quickstart` stops and tells you to restart in the project root.
 > - workstation (each agent's folder in the work zone) paths are resolved from the project root, so checkpoints and reactivation (`/reactivate-team`) look in the wrong place;
 > - teammates start in the lead's current directory — if the lead runs in the wrong directory (or its shell has moved into a subdirectory), its teammates start there too and their relative paths fail.
 >
@@ -96,7 +98,7 @@ Bootstrap will:
 Commit `_agent_team_work_zone/` to your project's git repository together with your code, and don't add it to `.gitignore`. What git tracks is the agents' core working memory: role definitions, checkpoints, work journals, discussion notes and the team registry. Runtime-only temporary files are excluded by the work zone's own `.gitignore`.
 
 - **The agents' working memory and logs are version-managed too.** Checkpoints, work journals, discussion notes and decisions are increasingly an important part of a project's development record. Tracking them in git — especially once pushed to GitHub — means the agents' project memory is managed by git: it is backed up, which greatly lowers the risk of losing it, and it can be rolled back, for example when the agents or the project have gone off track.
-- **Easy migration to a new machine.** Clone the project on another machine, run `npx agent-team-work-zone reconfigure` there once from the project directory (installed from source: `bash _agent_team_work_zone/resources/scripts/bootstrap.sh --reconfigure`); it installs the skills and hooks, sets Claude Code up, and asks the install questions again, including the display mode and auto permission mode that are set per machine. Then start Claude in the project directory, and `/reactivate-team` brings back an agent team with the same roles and the same state.
+- **Easy migration to a new machine.** Clone the project on another machine, run `npx agent-team-work-zone config` there once from the project directory (installed from source: `bash _agent_team_work_zone/resources/scripts/bootstrap.sh --reconfigure`); it installs the skills and hooks, sets Claude Code up, and asks the install questions again, including the display mode and auto permission mode that are set per machine. Then start Claude in the project directory, and `/reactivate-team` brings back an agent team with the same roles and the same state.
 - **Multi-developer collaboration.** Each developer can run one or more agent teams in the same project. The teams learn about each other through the work zone, and communicate or leave messages for each other via `git push` / `git pull` (for example through `meeting_room/`).
 
 ```bash
@@ -121,7 +123,7 @@ npx agent-team-work-zone@latest upgrade      # or: npx agent-team-work-zone@late
 - `.claude/settings.json` is merged again at every upgrade, with the same rule as at install: on `SessionStart`, `TeammateIdle` and `SessionEnd` the framework's hooks replace yours, and if you had your own there, `settings.json` is first backed up to `.claude/settings.json.bak.<UTC time>`.
 - An upgrade to a new major version asks you to confirm. Without a terminal, add `--yes` (with `upgrade.sh`, set `ATWZ_ASSUME_YES=1`).
 - If the upgrade cannot tell whether your install is the English or the Chinese edition, it shows a language menu; without a terminal, add `--lang en` or `--lang zh`.
-- An upgrade does not ask the install questions again: the teammate display mode and auto permission mode keep their current settings, and no optional `CLAUDE.md` section is added. To change any of these, run `reconfigure` (see "Changing your setup later" below).
+- An upgrade does not ask the install questions again: the teammate display mode and auto permission mode keep their current settings, and no optional `CLAUDE.md` section is added. To change any of these, run `config` (see "Changing your setup later" below).
 - **After any upgrade, restart your Claude Code sessions and run `/reactivate-team` for each running team.** Sessions and teammates that were already running may still be using the skills as they were loaded when they started: we have seen running teammates keep following the old `/checkpoint` steps after an upgrade until they were started again.
 
 #### New-version notice
@@ -133,18 +135,62 @@ When a Claude Code session starts in the project, it shows a short notice with t
 To answer the install questions again on an existing install — to change an earlier choice, after moving the project to another machine, or to add an optional `CLAUDE.md` section you skipped — run from the project directory:
 
 ```bash
-npx agent-team-work-zone reconfigure        # or: atwz reconfigure
+npx agent-team-work-zone config        # or: atwz config
 # installed from source: bash _agent_team_work_zone/resources/scripts/bootstrap.sh --reconfigure
 ```
 
+- `reconfigure` also works (`npx agent-team-work-zone reconfigure`) and does the same thing.
+- If you see `Unknown command: config`, the command you have (a global `atwz`, or a version cached by npx) is older than the version that added `config`: upgrade the command first (`npm i -g agent-team-work-zone@latest`), run `npx agent-team-work-zone@latest config`, or keep using `reconfigure`.
 - It uses the version you already have (no upgrade, no download, no reinstall) and changes nothing inside `_agent_team_work_zone/`.
 - It syncs the framework's skills, agents and hooks into `.claude/` again, merges `.claude/settings.json` (with the same backup rule as at install), and adds any framework sections missing from `CLAUDE.md`.
 - It asks again: the two optional `CLAUDE.md` sections (default yes; a section already there is skipped), git tracking, the teammate display mode and auto permission mode. Choosing to track the work zone in git again does not remove a line you added to `.gitignore` earlier; it tells you how.
 - Without a terminal it asks nothing and leaves all those choices as they are.
-- If the installed version is too old for this command, `npx agent-team-work-zone reconfigure` says so: upgrade first.
+- If the installed version is too old for this command, `npx agent-team-work-zone config` says so: upgrade first.
 - The source command has no such check: on an install older than v1.1.0, `bootstrap.sh --reconfigure` ignores the option, asks nothing and reports no error. Upgrade first (`bash _agent_team_work_zone/upgrade.sh`), then run it.
 
-### 2. Launch a conversation for each role
+### 2. Build your first team
+
+**Always start Claude Code in the project root** (the directory that directly contains `_agent_team_work_zone/`):
+
+```bash
+cd /path/to/your/project
+claude
+```
+
+The first time you start in this directory, Claude Code asks whether you trust this folder. The highlighted default is "No, exit", so pressing Enter all the way through exits Claude Code; choose "Yes, I trust this folder".
+
+Then type `/quickstart`, optionally followed by a one-sentence task description. **Recommended for first-time use.** It asks you no questions and, in order: looks at the project, chooses the team, builds it, waits until every member is ready (at most about 10 minutes), and finally sends one message telling you who is on the team, how to use it, and proposing a small task that can be done in about 20 minutes. The members only wait for you to assign work after starting; they do not start anything on their own.
+
+The conversation looks roughly like this (excerpt):
+
+```
+> /quickstart
+
+## Your team is ready
+
+I looked through the project (read the README, the directory structure and the commit history): a text-generation experiment repository written with PyTorch, mostly training scripts and a few model configs; 27 commits by two authors, the last one in August this year.
+It looks like you want to reproduce or use this project (because: all the commits are by other people), so I built a first team.
+I am not very sure about this: if it is wrong, just tell me. The planning member will first read the whole project, give you a project map, and then suggest whether to add people.
+
+| Member | Responsible for |
+|---|---|
+| textgen-coder | Writes code and runs commands in this project |
+| textgen-planner | Reads the project, works out its structure, writes plans and the project map |
+
+Normally you only need to talk to me: tell me what you want done, I split it up, give it to the right members, and bring the results back to you.
+…
+
+## Your decision
+
+Should I start "The planning member writes a one-page project map" now? Just reply run or don't run.
+```
+
+Reply run or don't run, or just say what you want done. The closing message also explains how to talk to a member directly, how to switch a member to the opus model, how to continue the conversation from the web or your phone, and how to bring the team back after a restart.
+
+- If the current directory already has a team or workstation, `/quickstart` stops and tells you whether to use `/reactivate-team` or `/onboard`.
+- If it is interrupted (for example, you pressed Esc or Claude Code exited), typing `/quickstart` again continues where it stopped; it does not build the team twice.
+
+#### Once you are familiar: start a conversation for each role and choose the team yourself
 
 ```bash
 claude -n "Secretary"
@@ -379,6 +425,10 @@ jq '.members[] | {name, tmuxPaneId, backendType}' \
 - **devil-advocate** — adversarial challenge (**opus**, flagship model, no memory)
 - **git-repo-manager** — git management (sonnet)
 
+### Automatic checkpoint reminder
+
+When a teammate is about to go idle and has not run `/checkpoint` for 15 minutes or more, it is reminded to run it before going idle. A teammate that was just spawned or reactivated is not reminded during its first 15 minutes (on purpose: at that moment its whole state is its workstation files); after that the reminder works as usual. So when you test the reminder after a reactivation, wait at least 15 minutes.
+
 ### Checkpoint git saving (optional)
 
 Every `/checkpoint` can also save the teammate's workstation files in git, so a checkpoint survives a `git stash`, a bad merge or an accidental overwrite. It is **off by default**; turn it on per project.
@@ -438,12 +488,12 @@ The skill does not edit the framework README or `teammate_rules.md`. A rule that
 
 ### Optional CLAUDE.md sections
 
-Two optional sections can be added to your project's `CLAUDE.md`. On first install, `bootstrap.sh` asks about each one with a menu (default yes, strongly recommended); without a terminal it adds both and prints how to remove one (delete the section marked `<!-- ATWZ-OPTIONAL:<id> -->` from `CLAUDE.md`). An upgrade never adds or asks; `reconfigure` asks again in a terminal (default yes; a section already there is skipped) and adds nothing without a terminal. Install, upgrade and reconfigure never modify or delete existing CLAUDE.md content; they only append: the framework sections if missing, and an optional section only in the cases above.
+Two optional sections can be added to your project's `CLAUDE.md`. On first install, `bootstrap.sh` asks about each one with a menu (default yes, strongly recommended); without a terminal it adds both and prints how to remove one (delete the section marked `<!-- ATWZ-OPTIONAL:<id> -->` from `CLAUDE.md`). An upgrade never adds or asks; `config` asks again in a terminal (default yes; a section already there is skipped) and adds nothing without a terminal. Install, upgrade and reconfigure never modify or delete existing CLAUDE.md content; they only append: the framework sections if missing, and an optional section only in the cases above.
 
 - **Messages to the user (format)** (`resources/claude_md_optional/user_message_format.md`): don't flood you with messages; a message triggered by a teammate's report starts with **Team brief:**; anything you should read or decide starts with a level-1 heading, `# To Be Read By User`, on its own line, followed by a bold status line (**Decision needed** / **Progress** / **Correction** / **Quiet round**). To use Chinese labels instead, replace `Team brief` with `队内简报` and the four status words with `需裁定 / 进展 / 更正 / 静默轮` (the heading stays `# To Be Read By User`).
-- **Plain vocabulary** (`resources/claude_md_optional/plain_vocabulary.md`): plain, precise words; no coined metaphorical names; few abbreviations. It ends with a list of **words you have rejected**, kept inside `CLAUDE.md` so it is always loaded. Each time you reject a word, the lead (or a flat agent) adds it to that list; teammates send additions to their lead.
+- **Plain vocabulary** (`resources/claude_md_optional/plain_vocabulary.md`): plain, precise words; no coined metaphorical names; few abbreviations. It ends with a list of **rejected words**, kept inside `CLAUDE.md` so it is always loaded. The list ships with starter entries, all words or phrases users rejected in real use. Each time you reject a word, the lead (or a flat agent) adds it to the list; teammates send additions to their lead. Delete any entry that does not apply to your project. If your project already has this section, upgrading or reconfiguring does not change its list; to get newer starter entries, copy them yourself from `resources/claude_md_optional/plain_vocabulary.md`.
 
-To add a section later, run `reconfigure` (see "Changing your setup later"), or append it by hand from the project directory (skip it if its `<!-- ATWZ-OPTIONAL:… -->` marker is already in `CLAUDE.md`):
+To add a section later, run `config` (see "Changing your setup later"), or append it by hand from the project directory (skip it if its `<!-- ATWZ-OPTIONAL:… -->` marker is already in `CLAUDE.md`):
 ```bash
 printf '\n' >> CLAUDE.md
 cat _agent_team_work_zone/resources/claude_md_optional/user_message_format.md >> CLAUDE.md
